@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart File Organizer - Dashboard</title>
+    <!-- Font Inter & Remix Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Navbar top -->
+        <header class="top-bar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="ri-folder-zip-line"></i>
+                </div>
+                <div>
+                    <h1>Smart File Organizer</h1>
+                    <p class="subtitle">Automatisation & Tri Intelligente de Fichiers</p>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <div class="watcher-badge" id="watcherStatusBadge">
+                    <span class="dot"></span>
+                    <span id="watcherStatusText">Watcher Inactif</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Barre de sélection du dossier -->
+        <section class="card folder-selector-card">
+            <div class="folder-input-group">
+                <i class="ri-folder-open-fill folder-icon"></i>
+                <input type="text" id="targetDirInput" placeholder="Saisissez ou collez le chemin du dossier à trier (ex: C:\Users\Nom\Downloads)...">
+                <button class="btn btn-primary" id="btnScan">
+                    <i class="ri-search-eye-line"></i> Scanner
+                </button>
+            </div>
+            
+            <div class="preset-buttons">
+                <span class="preset-label">Raccourcis rapides :</span>
+                <button class="btn-preset" data-path="DOWNLOADS"><i class="ri-download-line"></i> Téléchargements</button>
+                <button class="btn-preset" data-path="DESKTOP"><i class="ri-computer-line"></i> Bureau</button>
+                <button class="btn-preset" data-path="DOCUMENTS"><i class="ri-file-text-line"></i> Documents</button>
+            </div>
+        </section>
+
+        <!-- Grille de Métriques (KPI Cards) -->
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-icon blue"><i class="ri-file-search-line"></i></div>
+                <div class="metric-info">
+                    <span class="metric-value" id="kpiTotalFiles">0</span>
+                    <span class="metric-label">Fichiers Détectés</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon purple"><i class="ri-hard-drive-2-line"></i></div>
+                <div class="metric-info">
+                    <span class="metric-value" id="kpiTotalSize">0 B</span>
+                    <span class="metric-label">Taille Totale</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon green"><i class="ri-checkbox-circle-line"></i></div>
+                <div class="metric-info">
+                    <span class="metric-value" id="kpiActionsCount">0</span>
+                    <span class="metric-label">Actions Proposées</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon orange"><i class="ri-history-line"></i></div>
+                <div class="metric-info">
+                    <span class="metric-value" id="kpiHistoryBatches">0</span>
+                    <span class="metric-label">Lots Historique</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Layout Principal : Contrôles & Dashboard / Preview -->
+        <div class="main-grid">
+            <!-- Panneau de gauche : Options & Contrôles -->
+            <aside class="panel-left">
+                <div class="card">
+                    <h3><i class="ri-settings-4-line"></i> Configuration du Tri</h3>
+                    
+                    <div class="form-group">
+                        <label for="sortModeSelect">Mode d'organisation :</label>
+                        <select id="sortModeSelect" class="form-control">
+                            <option value="type" selected>📁 Par Catégorie (Type d'extension)</option>
+                            <option value="date">📅 Par Date (Année-Mois)</option>
+                            <option value="size">⚖️ Par Taille de fichier</option>
+                        </select>
+                    </div>
+
+                    <div class="toggle-group">
+                        <div class="toggle-item">
+                            <div>
+                                <strong>Surveillance Temps Réel (Watcher)</strong>
+                                <p class="help-text">Trie automatiquement les nouveaux fichiers téléchargés</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="toggleWatcher">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="btn btn-success btn-block" id="btnExecute" disabled>
+                            <i class="ri-rocket-line"></i> Lancer l'Organisation
+                        </button>
+                        <button class="btn btn-warning btn-block" id="btnUndo">
+                            <i class="ri-arrow-go-back-line"></i> Annuler Dernier Tri (Undo)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Répartition par Catégorie (Chart.js) -->
+                <div class="card chart-card">
+                    <h3><i class="ri-pie-chart-line"></i> Répartition des Fichiers</h3>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Panneau de droite : Table d'Aperçu & Historique -->
+            <main class="panel-right">
+                <div class="card tabs-card">
+                    <div class="tab-header">
+                        <button class="tab-btn active" data-tab="tab-preview">
+                            <i class="ri-list-check-2"></i> Aperçu des Actions (<span id="previewCount">0</span>)
+                        </button>
+                        <button class="tab-btn" data-tab="tab-history">
+                            <i class="ri-history-line"></i> Historique & Annulations
+                        </button>
+                    </div>
+
+                    <!-- Content Tab 1: Preview -->
+                    <div class="tab-content active" id="tab-preview">
+                        <div class="table-responsive">
+                            <table class="data-table" id="previewTable">
+                                <thead>
+                                    <tr>
+                                        <th>Fichier</th>
+                                        <th>Catégorie</th>
+                                        <th>Taille</th>
+                                        <th>Destination Proposée</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="previewTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="4">
+                                            <div class="empty-state">
+                                                <i class="ri-folder-search-line"></i>
+                                                <p>Sélectionnez un dossier et cliquez sur <strong>Scanner</strong> pour voir l'aperçu du tri.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Content Tab 2: History -->
+                    <div class="tab-content" id="tab-history">
+                        <div class="table-responsive">
+                            <table class="data-table" id="historyTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID Lot</th>
+                                        <th>Horodatage</th>
+                                        <th>Nb Fichiers</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="4">
+                                            <div class="empty-state">
+                                                <i class="ri-inbox-archive-line"></i>
+                                                <p>Aucun historique de tri enregistré pour l'instant.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modale Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
