@@ -1,5 +1,6 @@
 import os
 import shutil
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from core.rules import (
@@ -7,7 +8,9 @@ from core.rules import (
     get_date_subfolder, 
     get_size_subfolder, 
     DEFAULT_CATEGORIES, 
-    IGNORED_FILES
+    IGNORED_FILES,
+    is_temp_or_ignored,
+    load_custom_rules
 )
 from core.history import HistoryManager
 
@@ -21,6 +24,17 @@ def format_size(bytes_size: int) -> str:
         return f"{bytes_size / (1024 * 1024):.1f} MB"
     else:
         return f"{bytes_size / (1024 * 1024 * 1024):.2f} GB"
+
+def calculate_sha256(file_path: Path) -> str:
+    """Calcule le hash SHA256 d'un fichier."""
+    hasher = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            while chunk := f.read(65536):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except Exception:
+        return ""
 
 class FileOrganizer:
     def __init__(self, target_dir: str):
@@ -39,12 +53,11 @@ class FileOrganizer:
             return []
 
         proposed_actions = []
-        known_categories = list((custom_rules or DEFAULT_CATEGORIES).keys()) + ["Autres", "Divers"]
+        rules = custom_rules if custom_rules is not None else load_custom_rules(str(self.target_dir))
+        known_categories = list(rules.keys()) + ["Autres", "Divers"]
 
         def _should_skip_item(item_path: Path) -> bool:
-            if item_path.name in IGNORED_FILES:
-                return True
-            if item_path.name.startswith("."):
+            if is_temp_or_ignored(item_path):
                 return True
             # Ignorer les dossiers de catégories déjà créés à la racine du tri
             if item_path.is_dir() and item_path.parent == self.target_dir and item_path.name in known_categories:
@@ -64,7 +77,7 @@ class FileOrganizer:
                     files_to_process.append(item)
 
         for file_path in files_to_process:
-            category = get_category_for_extension(file_path.suffix, custom_rules)
+            category = get_category_for_extension(file_path.suffix, rules)
             
             # Détermination du sous-dossier de destination selon le mode
             if mode == "date":
@@ -147,6 +160,161 @@ class FileOrganizer:
             "message": f"{len(executed_moves)} fichier(s) organisé(s) avec succès !"
         }
 
+    def scan_duplicates(self, recursive: bool = False) -> list:
+        """
+        Recherche les doublons exacts par hash SHA256.
+        Returns: liste de groupes de doublons
+        """
+        if not self.is_valid_directory():
+            return []
+
+        size_map = {}
+        files_to_check = []
+
+        if recursive:
+            for root, _, files in os.walk(self.target_dir):
+                for f in files:
+                    fp = Path(root) / f
+                    if not is_temp_or_ignored(fp):
+                        files_to_check.append(fp)
+        else:
+            for item in self.target_dir.iterdir():
+                if item.is_file() and not is_temp_or_ignored(item):
+                    files_to_check.append(item)
+
+        for fp in files_to_check:
+            try:
+                sz = fp.stat().st_size
+                if sz > 0:
+                    size_map.setdefault(sz, []).append(fp)
+            except Exception:
+                pass
+
+        hash_map = {}
+        for sz, path_list in size_map.items():
+            if len(path_list) > 1:
+                for fp in path_list:
+                    h = calculate_sha256(fp)
+                    if h:
+                        hash_map.setdefault(h, []).append(fp)
+
+        duplicate_groups = []
+        for h, fp_list in hash_map.items():
+            if len(fp_list) > 1:
+                group_files = []
+                total_size = 0
+                for fp in fp_list:
+                    try:
+                        stat = fp.stat()
+                        sz = stat.st_size
+                        total_size = sz
+                        mtime_str = datetime.fromtimestamp(stat.st_mtime).strftime("%d/%m/%Y %H:%M")
+                    except Exception:
+                        sz = 0
+                        mtime_str = "Inconnu"
+                    group_files.append({
+                        "path": str(fp),
+                        "file_name": fp.name,
+                        "size_bytes": sz,
+                        "size_formatted": format_size(sz),
+                        "mtime": mtime_str
+                    })
+
+                duplicate_groups.append({
+                    "hash": h[:12],
+                    "count": len(fp_list),
+                    "size_formatted": format_size(total_size),
+                    "wasted_bytes": total_size * (len(fp_list) - 1),
+                    "wasted_formatted": format_size(total_size * (len(fp_list) - 1)),
+                    "files": group_files
+                })
+
+        return duplicate_groups
+
+    def delete_duplicates(self, file_paths: list) -> dict:
+        """Supprime en toute sécurité les fichiers doublons spécifiés."""
+        deleted_count = 0
+        freed_bytes = 0
+
+        for path_str in file_paths:
+            fp = Path(path_str)
+            if fp.exists() and fp.is_file() and self.target_dir in fp.parents:
+                try:
+                    sz = fp.stat().st_size
+                    fp.unlink()
+                    deleted_count += 1
+                    freed_bytes += sz
+                except Exception as e:
+                    print(f"Erreur lors de la suppression de {path_str}: {e}")
+
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "freed_formatted": format_size(freed_bytes),
+            "message": f"{deleted_count} fichier(s) doublon(s) supprimé(s) ({format_size(freed_bytes)} libérés)."
+        }
+
+    def bulk_rename(self, replace_spaces: str = "_", lowercase: bool = False, add_date_prefix: bool = False, recursive: bool = False) -> dict:
+        """
+        Renomme les fichiers selon les règles choisies.
+        """
+        if not self.is_valid_directory():
+            return {"success": False, "message": "Dossier cible invalide."}
+
+        renamed_count = 0
+        files_to_rename = []
+
+        if recursive:
+            for root, _, files in os.walk(self.target_dir):
+                for f in files:
+                    fp = Path(root) / f
+                    if not is_temp_or_ignored(fp):
+                        files_to_rename.append(fp)
+        else:
+            for item in self.target_dir.iterdir():
+                if item.is_file() and not is_temp_or_ignored(item):
+                    files_to_rename.append(item)
+
+        for fp in files_to_rename:
+            stem = fp.stem
+            suffix = fp.suffix
+
+            new_stem = stem
+            if replace_spaces:
+                new_stem = new_stem.replace(" ", replace_spaces)
+            if lowercase:
+                new_stem = new_stem.lower()
+                suffix = suffix.lower()
+
+            if add_date_prefix:
+                try:
+                    mtime = fp.stat().st_mtime
+                    dt_prefix = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                    if not new_stem.startswith(dt_prefix):
+                        new_stem = f"{dt_prefix}_{new_stem}"
+                except Exception:
+                    pass
+
+            new_file_name = f"{new_stem}{suffix}"
+            if new_file_name != fp.name:
+                new_path = fp.parent / new_file_name
+                counter = 1
+                while new_path.exists() and new_path != fp:
+                    new_path = fp.parent / f"{new_stem}_{counter}{suffix}"
+                    counter += 1
+
+                try:
+                    fp.rename(new_path)
+                    renamed_count += 1
+                except Exception as e:
+                    print(f"Erreur renommage {fp} -> {new_path}: {e}")
+
+        return {
+            "success": True,
+            "renamed_count": renamed_count,
+            "message": f"{renamed_count} fichier(s) renommé(s) avec succès."
+        }
+
     def get_stats(self) -> dict:
         """
         Calcule les statistiques actuelles du dossier (répartition par catégorie, taille totale).
@@ -159,12 +327,14 @@ class FileOrganizer:
         categories_count = {}
         categories_size = {}
 
+        rules = load_custom_rules(str(self.target_dir))
+
         for item in self.target_dir.iterdir():
-            if item.name in IGNORED_FILES or item.name.startswith("."):
+            if is_temp_or_ignored(item):
                 continue
 
             if item.is_file():
-                cat = get_category_for_extension(item.suffix)
+                cat = get_category_for_extension(item.suffix, rules)
                 try:
                     sz = item.stat().st_size
                 except Exception:
@@ -184,7 +354,7 @@ class FileOrganizer:
                     for f in files:
                         try:
                             fp = Path(root) / f
-                            if not fp.name.startswith("."):
+                            if not is_temp_or_ignored(fp):
                                 dir_files += 1
                                 dir_size += fp.stat().st_size
                         except Exception:
@@ -211,3 +381,4 @@ class FileOrganizer:
             "total_size_formatted": format_size(total_size),
             "categories": categories_summary
         }
+

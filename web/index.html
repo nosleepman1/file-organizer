@@ -1,33 +1,44 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart File Organizer - Dashboard</title>
-    <!-- Font Inter & Remix Icons -->
+    <title>Smart File Organizer - Dashboard Pro</title>
+    <!-- Fonts & Remix Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-    <!-- Chart.js pour les graphiques -->
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar / Navbar top -->
+        <!-- Top Bar Header -->
         <header class="top-bar">
             <div class="brand">
                 <div class="brand-icon">
-                    <i class="ri-folder-zip-line"></i>
+                    <i class="ri-folder-shield-2-line"></i>
                 </div>
                 <div>
-                    <h1>Smart File Organizer</h1>
-                    <p class="subtitle">Automatisation & Tri Intelligente de Fichiers</p>
+                    <h1>Smart File Organizer <span class="badge-pro">PRO</span></h1>
+                    <p class="subtitle">Gestion, Tri Intelligents & Déduplication de Fichiers</p>
                 </div>
             </div>
 
             <div class="header-actions">
+                <!-- Theme Switcher Selector -->
+                <div class="theme-selector">
+                    <i class="ri-palette-line theme-icon"></i>
+                    <select id="themeSelect" class="theme-dropdown">
+                        <option value="dark" selected>🌙 Sombre (Dark Glass)</option>
+                        <option value="light">☀️ Clair (Light Clean)</option>
+                        <option value="cyber">⚡ Cyberpunk (Neon Blue)</option>
+                        <option value="emerald">🌲 Émeraude (Forest)</option>
+                    </select>
+                </div>
+
                 <div class="watcher-badge" id="watcherStatusBadge">
                     <span class="dot"></span>
                     <span id="watcherStatusText">Watcher Inactif</span>
@@ -35,25 +46,35 @@
             </div>
         </header>
 
-        <!-- Barre de sélection du dossier -->
+        <!-- Folder Selector Card -->
         <section class="card folder-selector-card">
             <div class="folder-input-group">
                 <i class="ri-folder-open-fill folder-icon"></i>
-                <input type="text" id="targetDirInput" placeholder="Saisissez ou collez le chemin du dossier à trier (ex: C:\Users\Nom\Downloads)...">
+                <input type="text" id="targetDirInput" placeholder="Saisissez ou collez le chemin du dossier (ex: C:\Users\Nom\Downloads)...">
                 <button class="btn btn-primary" id="btnScan">
                     <i class="ri-search-eye-line"></i> Scanner
                 </button>
             </div>
             
-            <div class="preset-buttons">
-                <span class="preset-label">Raccourcis rapides :</span>
-                <button class="btn-preset" data-path="DOWNLOADS"><i class="ri-download-line"></i> Téléchargements</button>
-                <button class="btn-preset" data-path="DESKTOP"><i class="ri-computer-line"></i> Bureau</button>
-                <button class="btn-preset" data-path="DOCUMENTS"><i class="ri-file-text-line"></i> Documents</button>
+            <div class="preset-bar">
+                <div class="preset-buttons">
+                    <span class="preset-label"><i class="ri-flashlight-fill"></i> Raccourcis :</span>
+                    <button class="btn-preset" data-path="DOWNLOADS"><i class="ri-download-line"></i> Téléchargements</button>
+                    <button class="btn-preset" data-path="DESKTOP"><i class="ri-computer-line"></i> Bureau</button>
+                    <button class="btn-preset" data-path="DOCUMENTS"><i class="ri-file-text-line"></i> Documents</button>
+                </div>
+
+                <div class="recursive-toggle-inline">
+                    <label class="toggle-switch-label" title="Inclure les sous-dossiers lors de la recherche et du tri">
+                        <input type="checkbox" id="toggleRecursive">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text"><i class="ri-node-tree"></i> Mode Récursif</span>
+                    </label>
+                </div>
             </div>
         </section>
 
-        <!-- Grille de Métriques (KPI Cards) -->
+        <!-- Metrics Grid (KPI Cards) -->
         <section class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-icon blue"><i class="ri-file-search-line"></i></div>
@@ -73,7 +94,7 @@
                 <div class="metric-icon green"><i class="ri-checkbox-circle-line"></i></div>
                 <div class="metric-info">
                     <span class="metric-value" id="kpiActionsCount">0</span>
-                    <span class="metric-label">Actions Proposées</span>
+                    <span class="metric-label">Actions Sélectionnées</span>
                 </div>
             </div>
             <div class="metric-card">
@@ -85,17 +106,17 @@
             </div>
         </section>
 
-        <!-- Layout Principal : Contrôles & Dashboard / Preview -->
+        <!-- Main Layout -->
         <div class="main-grid">
-            <!-- Panneau de gauche : Options & Contrôles -->
+            <!-- Left Panel -->
             <aside class="panel-left">
                 <div class="card">
                     <h3><i class="ri-settings-4-line"></i> Configuration du Tri</h3>
                     
                     <div class="form-group">
-                        <label for="sortModeSelect">Mode d'organisation :</label>
+                        <label for="sortModeSelect">Mode de classement :</label>
                         <select id="sortModeSelect" class="form-control">
-                            <option value="type" selected>📁 Par Catégorie (Type d'extension)</option>
+                            <option value="type" selected>📁 Par Catégorie (Extension)</option>
                             <option value="date">📅 Par Date (Année-Mois)</option>
                             <option value="size">⚖️ Par Taille de fichier</option>
                         </select>
@@ -105,7 +126,7 @@
                         <div class="toggle-item">
                             <div>
                                 <strong>Surveillance Temps Réel (Watcher)</strong>
-                                <p class="help-text">Trie automatiquement les nouveaux fichiers téléchargés</p>
+                                <p class="help-text">Auto-classement des nouveaux fichiers téléchargés</p>
                             </div>
                             <label class="switch">
                                 <input type="checkbox" id="toggleWatcher">
@@ -116,7 +137,7 @@
 
                     <div class="action-buttons">
                         <button class="btn btn-success btn-block" id="btnExecute" disabled>
-                            <i class="ri-rocket-line"></i> Lancer l'Organisation
+                            <i class="ri-rocket-line"></i> Lancer l'Organisation (<span id="executeSelectedCount">0</span>)
                         </button>
                         <button class="btn btn-warning btn-block" id="btnUndo">
                             <i class="ri-arrow-go-back-line"></i> Annuler Dernier Tri (Undo)
@@ -124,7 +145,7 @@
                     </div>
                 </div>
 
-                <!-- Répartition par Catégorie (Chart.js) -->
+                <!-- Chart Card -->
                 <div class="card chart-card">
                     <h3><i class="ri-pie-chart-line"></i> Répartition des Fichiers</h3>
                     <div class="chart-container">
@@ -133,24 +154,52 @@
                 </div>
             </aside>
 
-            <!-- Panneau de droite : Table d'Aperçu & Historique -->
+            <!-- Right Panel : Tabs -->
             <main class="panel-right">
                 <div class="card tabs-card">
                     <div class="tab-header">
                         <button class="tab-btn active" data-tab="tab-preview">
-                            <i class="ri-list-check-2"></i> Aperçu des Actions (<span id="previewCount">0</span>)
+                            <i class="ri-list-check-2"></i> Aperçu (<span id="previewCount">0</span>)
+                        </button>
+                        <button class="tab-btn" data-tab="tab-duplicates">
+                            <i class="ri-file-copy-2-line"></i> Doublons Hash
+                        </button>
+                        <button class="tab-btn" data-tab="tab-rename">
+                            <i class="ri-edit-line"></i> Renommage
+                        </button>
+                        <button class="tab-btn" data-tab="tab-rules">
+                            <i class="ri-equalizer-line"></i> Règles & Catégories
                         </button>
                         <button class="tab-btn" data-tab="tab-history">
-                            <i class="ri-history-line"></i> Historique & Annulations
+                            <i class="ri-history-line"></i> Historique
                         </button>
                     </div>
 
-                    <!-- Content Tab 1: Preview -->
+                    <!-- TAB 1: PREVIEW -->
                     <div class="tab-content active" id="tab-preview">
+                        <!-- Search & Filter Controls -->
+                        <div class="table-toolbar">
+                            <div class="search-box">
+                                <i class="ri-search-line"></i>
+                                <input type="text" id="searchInput" placeholder="Filtrer par nom de fichier...">
+                            </div>
+                            <div class="filter-box">
+                                <select id="categoryFilter" class="form-control-sm">
+                                    <option value="">Toutes les catégories</option>
+                                </select>
+                            </div>
+                            <div class="selection-counter">
+                                <span id="selectedCountBadge" class="badge-info">0 sélectionné(s)</span>
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
                             <table class="data-table" id="previewTable">
                                 <thead>
                                     <tr>
+                                        <th style="width: 40px;">
+                                            <input type="checkbox" id="selectAllCheckbox" checked>
+                                        </th>
                                         <th>Fichier</th>
                                         <th>Catégorie</th>
                                         <th>Taille</th>
@@ -159,10 +208,10 @@
                                 </thead>
                                 <tbody id="previewTableBody">
                                     <tr class="empty-row">
-                                        <td colspan="4">
+                                        <td colspan="5">
                                             <div class="empty-state">
                                                 <i class="ri-folder-search-line"></i>
-                                                <p>Sélectionnez un dossier et cliquez sur <strong>Scanner</strong> pour voir l'aperçu du tri.</p>
+                                                <p>Sélectionnez un dossier et cliquez sur <strong>Scanner</strong> pour afficher l'aperçu du tri.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -171,7 +220,95 @@
                         </div>
                     </div>
 
-                    <!-- Content Tab 2: History -->
+                    <!-- TAB 2: DUPLICATES -->
+                    <div class="tab-content" id="tab-duplicates">
+                        <div class="toolbar-flex">
+                            <div>
+                                <h4>Détection des Doublons Réels (SHA256)</h4>
+                                <p class="help-text">Analyse le contenu binaire exact des fichiers pour libérer de l'espace disque.</p>
+                            </div>
+                            <button class="btn btn-primary" id="btnScanDuplicates">
+                                <i class="ri-fingerprint-line"></i> Analyser les Doublons
+                            </button>
+                        </div>
+
+                        <div id="duplicateStatsBanner" class="stats-banner hidden">
+                            <div class="stat-banner-item">
+                                <span class="stat-num" id="dupGroupsCount">0</span>
+                                <span class="stat-desc">Groupes de doublons</span>
+                            </div>
+                            <div class="stat-banner-item">
+                                <span class="stat-num orange" id="dupWastedSpace">0 B</span>
+                                <span class="stat-desc">Espace gâché récupérable</span>
+                            </div>
+                            <button class="btn btn-danger" id="btnDeleteSelectedDuplicates" disabled>
+                                <i class="ri-delete-bin-line"></i> Supprimer les doublons cochés
+                            </button>
+                        </div>
+
+                        <div id="duplicatesList" class="duplicates-container">
+                            <div class="empty-state">
+                                <i class="ri-file-copy-line"></i>
+                                <p>Cliquez sur <strong>Analyser les Doublons</strong> pour scanner le dossier courant.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: BULK RENAME -->
+                    <div class="tab-content" id="tab-rename">
+                        <h4>Nettoyage & Renommage en Masse</h4>
+                        <p class="help-text">Appliquez un motif de renommage uniforme sur tous les fichiers du dossier.</p>
+
+                        <div class="rename-options-card">
+                            <div class="form-group">
+                                <label for="replaceSpacesSelect">Remplacement des espaces :</label>
+                                <select id="replaceSpacesSelect" class="form-control">
+                                    <option value="_">Remplacer par underscore ( mon_fichier.txt )</option>
+                                    <option value="-">Remplacer par tiret ( mon-fichier.txt )</option>
+                                    <option value="">Conserver les espaces</option>
+                                </select>
+                            </div>
+
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="renameLowercase" checked>
+                                    <span>Forcer les lettres minuscules (ex: <code>PHOTO.JPG</code> &rarr; <code>photo.jpg</code>)</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="renameAddDate">
+                                    <span>Ajouter la date en préfixe (ex: <code>2026-07-29_document.pdf</code>)</span>
+                                </label>
+                            </div>
+
+                            <button class="btn btn-primary mt-3" id="btnApplyRename">
+                                <i class="ri-edit-2-line"></i> Appliquer le Renommage
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TAB 4: RULES MANAGER -->
+                    <div class="tab-content" id="tab-rules">
+                        <div class="toolbar-flex">
+                            <div>
+                                <h4>Gestionnaire de Règles & Extensions</h4>
+                                <p class="help-text">Personnalisez les catégories et leurs extensions de fichier associées.</p>
+                            </div>
+                            <div class="btn-group-sm">
+                                <button class="btn btn-secondary" id="btnAddCategoryBtn">
+                                    <i class="ri-add-circle-line"></i> Nouvelle Catégorie
+                                </button>
+                                <button class="btn btn-success" id="btnSaveRules">
+                                    <i class="ri-save-line"></i> Sauvegarder Règles
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="rulesContainer" class="rules-grid">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <!-- TAB 5: HISTORY -->
                     <div class="tab-content" id="tab-history">
                         <div class="table-responsive">
                             <table class="data-table" id="historyTable">
@@ -196,12 +333,13 @@
                             </table>
                         </div>
                     </div>
+
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- Modale Toast Notification -->
+    <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
     <script src="/js/app.js"></script>

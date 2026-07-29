@@ -1,4 +1,4 @@
-# 📁 Smart File Organizer
+# Smart File Organizer
 
 > **Un outil intelligent, sécurisé et élégant pour trier et automatiser la gestion de vos fichiers sous Windows/Linux/macOS.**
 
@@ -10,18 +10,20 @@
 
 ## 🌟 Fonctionnalités Clés
 
-- 🎨 **Dashboard Web Moderne** : Interface graphique en *Glassmorphism Dark Mode* avec graphiques interactifs (Chart.js) pour visualiser la répartition des types de fichiers.
-- ⚡ **Classification Automatique** : Tri par catégories (*Documents*, *Images*, *Vidéos*, *Audio*, *Archives*, *Code & Dev*, *Exécutables*), par **Date (Année-Mois)** ou par **Taille**.
-- 🛡️ **Sécurité Anti-Perte de Données** :
-  - **Mode Aperçu (Dry-Run)** : Prévisualisez exactement ce qui sera déplacé avant de lancer l'organisation.
-  - **Anti-Écrasement des Doublons** : Gestion automatique des doublons avec renommage dynamique (`document (1).pdf`).
-  - **Bouton Annuler (Undo 1-Clic)** : Historique complet permettant de restaurer immédiatement des fichiers à leur emplacement d'origine en cas d'erreur.
-- 👀 **Surveillance en Temps Réel (Auto-Watcher)** : Service en arrière-plan qui surveille un dossier (ex: *Téléchargements*) et classe automatiquement chaque nouveau fichier téléchargé.
-- 💻 **Interface CLI & API REST** : Utilisable aussi bien en ligne de commande que via son API backend.
+- 🎨 **Dashboard Web 4 Thèmes & Glassmorphism** : 4 thèmes personnalisables (*Sombre*, *Clair*, *Cyberpunk Neon*, *Émeraude*) avec graphiques interactifs (Chart.js) et mémorisation du thème.
+- ⚡ **Classification Automatique & Tri Récursif** : Tri par catégories (*Documents*, *Images*, *Vidéos*, *Audio*, *Archives*, *Code & Dev*, *Exécutables*), par **Date (Année-Mois)** ou par **Taille**, avec option de tri récursif dans les sous-dossiers.
+- 🔍 **Détection des Doublons Réels (SHA256)** : Analyse du contenu binaire exact des fichiers pour libérer de l'espace disque en supprimant les doublons exacts.
+- ✏️ **Renommage en Masse (Bulk Rename)** : Remplacement des espaces par `_` ou `-`, forçage en minuscules et ajout de préfixes de date.
+- ⚙️ **Gestionnaire de Règles Personnalisées** : Interface visuelle pour créer des catégories et gérer leurs extensions de fichier avec persistance dans `custom_rules.json`.
+- 🛡️ **Sécurité & Annulation par Lot** :
+  - **Aperçu avec Sélection par Case à Cocher** : Choisissez exactement quels fichiers déplacer.
+  - **Anti-Écrasement des Doublons** : Renommage dynamique automatique (`document (1).pdf`).
+  - **Annulation Ciblée (Undo par Lot)** : Restauration immédiate des fichiers pour n'importe quel lot passé de l'historique.
+- 👀 **Surveillance en Temps Réel (Auto-Watcher)** : Tri automatique en arrière-plan avec exclusion des fichiers temporaires (`.crdownload`, `.part`, `.tmp`).
 
 ---
 
-## 📂 Structure du Projet
+## Structure du Projet
 
 ```text
 smart-file-organizer/
@@ -44,12 +46,14 @@ smart-file-organizer/
 
 ---
 
-## 🚀 Installation & Prérequis
+## Installation & Prérequis
 
 ### Prérequis
+
 - Python 3.10 ou version ultérieure.
 
 ### Installation des dépendances
+
 Ouvrez un terminal dans le dossier du projet et exécutez :
 
 ```powershell
@@ -58,7 +62,7 @@ py -m pip install -r requirements.txt
 
 ---
 
-## 💻 Utilisation
+## Utilisation
 
 ### 1. Interface Web Dashboard (Recommandé)
 
@@ -68,9 +72,9 @@ Lancez le serveur Flask :
 py server.py
 ```
 
-Ouvrez ensuite votre navigateur sur **[http://localhost:5000](http://localhost:5000)**.
+Ouvrez ensuite votre navigteur sur **[http://localhost:5000](http://localhost:5000)**.
 
-- **Raccourcis Rapides** : Cliquez sur *Téléchargements*, *Bureau* ou *Documents* pour sélectionner votre dossier en 1-clic.
+- **Raccourcis Rapides** : Cliquez sur _Téléchargements_, _Bureau_ ou _Documents_ pour sélectionner votre dossier en 1-clic.
 - **Lancer le Tri** : Analysez le dossier, vérifiez l'aperçu puis cliquez sur **Lancer l'Organisation**.
 - **Annuler** : Cliquez sur **Annuler Dernier Tri (Undo)** à tout moment.
 
@@ -81,27 +85,32 @@ Ouvrez ensuite votre navigateur sur **[http://localhost:5000](http://localhost:5
 Vous pouvez utiliser le script CLI `organizer_cli.py` :
 
 #### Aperçu sans modifier de fichier (Dry-Run)
+
 ```powershell
 py organizer_cli.py --dry-run --dir "C:\Users\VotreNom\Downloads"
 ```
 
 #### Exécuter le tri
+
 ```powershell
 py organizer_cli.py --dir "C:\Users\VotreNom\Downloads"
 ```
 
 #### Changer le mode de tri (par Date ou par Taille)
+
 ```powershell
 py organizer_cli.py --mode date --dir "C:\Users\VotreNom\Downloads"
 py organizer_cli.py --mode size --dir "C:\Users\VotreNom\Downloads"
 ```
 
 #### Annuler le dernier tri
+
 ```powershell
 py organizer_cli.py --undo --dir "C:\Users\VotreNom\Downloads"
 ```
 
 #### Activer la surveillance automatique en temps réel
+
 ```powershell
 py organizer_cli.py --watch --dir "C:\Users\VotreNom\Downloads"
 ```

@@ -2,6 +2,7 @@ import time
 import threading
 from pathlib import Path
 from core.organizer import FileOrganizer
+from core.rules import is_temp_or_ignored
 
 try:
     from watchdog.observers import Observer
@@ -65,12 +66,18 @@ class FolderWatcher:
         class Handler(FileSystemEventHandler):
             def on_created(self, event):
                 if not event.is_directory:
+                    fp = Path(event.src_path)
+                    if is_temp_or_ignored(fp):
+                        return
                     # Attendre que l'écriture du fichier se termine
                     time.sleep(watcher_self.debounce_seconds)
                     watcher_self._trigger_auto_organize()
 
             def on_moved(self, event):
                 if not event.is_directory:
+                    fp = Path(event.dest_path)
+                    if is_temp_or_ignored(fp):
+                        return
                     time.sleep(watcher_self.debounce_seconds)
                     watcher_self._trigger_auto_organize()
 
