@@ -52,17 +52,28 @@ class HistoryManager:
         self._save_history(history)
         return batch_id
 
-    def undo_last_batch(self) -> tuple[bool, str, int]:
+    def undo_batch(self, batch_id: str = None) -> tuple[bool, str, int]:
         """
-        Annule le tout dernier lot de déplacements.
+        Annule un lot spécifique par son ID (ou le dernier si batch_id est None).
         Returns: (success, message, restored_count)
         """
         history = self._load_history()
         if not history:
             return False, "Aucun historique disponible pour annulation.", 0
 
-        last_batch = history.pop(0)
-        moves = last_batch.get("moves", [])
+        target_index = -1
+        if batch_id:
+            for idx, batch in enumerate(history):
+                if batch.get("batch_id") == batch_id:
+                    target_index = idx
+                    break
+            if target_index == -1:
+                return False, f"Lot #{batch_id} introuvable dans l'historique.", 0
+        else:
+            target_index = 0
+
+        target_batch = history.pop(target_index)
+        moves = target_batch.get("moves", [])
         restored_count = 0
 
         for move in reversed(moves):
@@ -90,7 +101,11 @@ class HistoryManager:
         self._clean_empty_dirs()
 
         self._save_history(history)
-        return True, f"Lot #{last_batch['batch_id']} annulé ({restored_count}/{len(moves)} fichiers restaurés).", restored_count
+        return True, f"Lot #{target_batch['batch_id']} annulé ({restored_count}/{len(moves)} fichiers restaurés).", restored_count
+
+    def undo_last_batch(self) -> tuple[bool, str, int]:
+        """Annule le tout dernier lot de déplacements."""
+        return self.undo_batch(None)
 
     def get_history(self) -> list:
         """Retourne la liste des lots d'historique enregistrés."""

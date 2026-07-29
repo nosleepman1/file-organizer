@@ -14,6 +14,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from core.organizer import FileOrganizer
 from core.history import HistoryManager
 from core.watcher import FolderWatcher
+from core.rules import load_custom_rules, save_custom_rules
 
 # Résolution automatique des répertoires systèmes
 USER_HOME = Path.home()
@@ -55,6 +56,7 @@ def api_scan():
     data = request.json or {}
     raw_path = data.get("target_dir", "DOWNLOADS")
     mode = data.get("mode", "type")
+    recursive = bool(data.get("recursive", False))
 
     resolved_path = resolve_target_path(raw_path)
     organizer = FileOrganizer(resolved_path)
@@ -65,7 +67,7 @@ def api_scan():
             "message": f"Dossier introuvable ou invalide : {resolved_path}"
         }), 400
 
-    actions = organizer.scan(mode=mode)
+    actions = organizer.scan(mode=mode, recursive=recursive)
     stats = organizer.get_stats()
 
     return jsonify({
@@ -90,14 +92,86 @@ def api_organize():
     result = organizer.execute(actions)
     return jsonify(result)
 
+@app.route("/api/duplicates", methods=["POST"])
+def api_duplicates():
+    data = request.json or {}
+    raw_path = data.get("target_dir", "DOWNLOADS")
+    recursive = bool(data.get("recursive", False))
+
+    resolved_path = resolve_target_path(raw_path)
+    organizer = FileOrganizer(resolved_path)
+
+    if not organizer.is_valid_directory():
+        return jsonify({"success": False, "message": f"Dossier invalide : {resolved_path}"}), 400
+
+    groups = organizer.scan_duplicates(recursive=recursive)
+    return jsonify({
+        "success": True,
+        "target_dir": resolved_path,
+        "groups": groups
+    })
+
+@app.route("/api/duplicates/delete", methods=["POST"])
+def api_delete_duplicates():
+    data = request.json or {}
+    raw_path = data.get("target_dir", "DOWNLOADS")
+    file_paths = data.get("file_paths", [])
+
+    resolved_path = resolve_target_path(raw_path)
+    organizer = FileOrganizer(resolved_path)
+
+    if not file_paths:
+        return jsonify({"success": False, "message": "Aucun fichier spécifié pour la suppression."}), 400
+
+    res = organizer.delete_duplicates(file_paths)
+    return jsonify(res)
+
+@app.route("/api/rename", methods=["POST"])
+def api_rename():
+    data = request.json or {}
+    raw_path = data.get("target_dir", "DOWNLOADS")
+    replace_spaces = data.get("replace_spaces", "_")
+    lowercase = bool(data.get("lowercase", False))
+    add_date_prefix = bool(data.get("add_date_prefix", False))
+    recursive = bool(data.get("recursive", False))
+
+    resolved_path = resolve_target_path(raw_path)
+    organizer = FileOrganizer(resolved_path)
+
+    if not organizer.is_valid_directory():
+        return jsonify({"success": False, "message": f"Dossier invalide : {resolved_path}"}), 400
+
+    res = organizer.bulk_rename(
+        replace_spaces=replace_spaces, 
+        lowercase=lowercase, 
+        add_date_prefix=add_date_prefix, 
+        recursive=recursive
+    )
+    return jsonify(res)
+
+@app.route("/api/rules", methods=["GET", "POST"])
+def api_rules():
+    raw_path = request.args.get("target_dir", "DOWNLOADS") if request.method == "GET" else (request.json or {}).get("target_dir", "DOWNLOADS")
+    resolved_path = resolve_target_path(raw_path)
+
+    if request.method == "POST":
+        data = request.json or {}
+        rules = data.get("rules", {})
+        saved = save_custom_rules(rules, resolved_path)
+        return jsonify({"success": saved, "message": "Règles sauvegardées avec succès !" if saved else "Erreur de sauvegarde."})
+    else:
+        rules = load_custom_rules(resolved_path)
+        return jsonify({"success": True, "rules": rules})
+
 @app.route("/api/undo", methods=["POST"])
 def api_undo():
     data = request.json or {}
     raw_path = data.get("target_dir", "DOWNLOADS")
+    batch_id = data.get("batch_id")
     resolved_path = resolve_target_path(raw_path)
 
     history_mgr = HistoryManager(resolved_path)
-    success, message, count = history_mgr.undo_last_batch()
+    success, message, count = history_mgr.undo_batch(batch_id)
 
     return jsonify({
         "success": success,
@@ -151,3 +225,4 @@ if __name__ == "__main__":
     port = 5000
     print(f"🚀 Serveur Smart File Organizer démarré sur http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=True)
+
