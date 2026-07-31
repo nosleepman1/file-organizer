@@ -25,16 +25,12 @@ def format_size(bytes_size: int) -> str:
     else:
         return f"{bytes_size / (1024 * 1024 * 1024):.2f} GB"
 
+from core.hash_cache import global_hash_cache
+from concurrent.futures import ThreadPoolExecutor
+
 def calculate_sha256(file_path: Path) -> str:
-    """Calcule le hash SHA256 d'un fichier."""
-    hasher = hashlib.sha256()
-    try:
-        with open(file_path, "rb") as f:
-            while chunk := f.read(65536):
-                hasher.update(chunk)
-        return hasher.hexdigest()
-    except Exception:
-        return ""
+    """Calcule le hash SHA256 d'un fichier avec cache disque intelligent."""
+    return global_hash_cache.get_hash(file_path)
 
 def safe_delete_file(file_path: Path) -> tuple:
     """
@@ -315,10 +311,16 @@ class FileOrganizer:
         hash_map = {}
         for sz, path_list in size_map.items():
             if len(path_list) > 1:
-                for fp in path_list:
-                    h = calculate_sha256(fp)
-                    if h:
-                        hash_map.setdefault(h, []).append(fp)
+                with ThreadPoolExecutor(max_workers=min(16, len(path_list))) as executor:
+                    future_to_fp = {executor.submit(calculate_sha256, fp): fp for fp in path_list}
+                    for future in future_to_fp:
+                        fp = future_to_fp[future]
+                        try:
+                            h = future.result()
+                            if h:
+                                hash_map.setdefault(h, []).append(fp)
+                        except Exception:
+                            pass
 
         duplicate_groups = []
         for h, fp_list in hash_map.items():
