@@ -61,42 +61,66 @@ def api_health():
     })
 
 # --------------------------------------------------------------------------
-# Endpoints DeepSeek IA
+# Endpoints Multi-Fournisseurs IA (DeepSeek, Ollama offline, OpenAI, Custom)
 # --------------------------------------------------------------------------
 @app.route("/api/ai/config", methods=["GET", "POST"])
 def api_ai_config():
     if request.method == "POST":
         data = request.json or {}
+        if "ai_provider" in data:
+            global_config.set("ai_provider", data["ai_provider"])
         if "deepseek_api_key" in data and data["deepseek_api_key"]:
             global_config.set("deepseek_api_key", data["deepseek_api_key"])
         if "deepseek_model" in data:
             global_config.set("deepseek_model", data["deepseek_model"])
+        if "openai_api_key" in data and data["openai_api_key"]:
+            global_config.set("openai_api_key", data["openai_api_key"])
+        if "openai_model" in data:
+            global_config.set("openai_model", data["openai_model"])
+        if "ollama_endpoint" in data:
+            global_config.set("ollama_endpoint", data["ollama_endpoint"])
+        if "ollama_model" in data:
+            global_config.set("ollama_model", data["ollama_model"])
         if "deepseek_custom_prompt" in data:
             global_config.set("deepseek_custom_prompt", data["deepseek_custom_prompt"])
+        if "content_aware_parsing" in data:
+            global_config.set("content_aware_parsing", bool(data["content_aware_parsing"]))
 
         return jsonify({
             "success": True,
             "message": "Configuration IA sauvegardée avec succès !",
-            "masked_key": global_config.get_masked_api_key(),
-            "model": global_config.get("deepseek_model"),
+            "ai_provider": global_config.get("ai_provider"),
+            "masked_key": global_config.get_masked_api_key("deepseek_api_key"),
+            "openai_masked_key": global_config.get_masked_api_key("openai_api_key"),
+            "ollama_endpoint": global_config.get("ollama_endpoint"),
+            "ollama_model": global_config.get("ollama_model"),
+            "content_aware_parsing": global_config.get("content_aware_parsing"),
             "custom_prompt": global_config.get("deepseek_custom_prompt")
         })
     else:
         return jsonify({
             "success": True,
+            "ai_provider": global_config.get("ai_provider", "deepseek"),
             "has_key": bool(global_config.get("deepseek_api_key")),
-            "masked_key": global_config.get_masked_api_key(),
-            "model": global_config.get("deepseek_model"),
+            "masked_key": global_config.get_masked_api_key("deepseek_api_key"),
+            "deepseek_model": global_config.get("deepseek_model"),
+            "openai_masked_key": global_config.get_masked_api_key("openai_api_key"),
+            "openai_model": global_config.get("openai_model"),
+            "ollama_endpoint": global_config.get("ollama_endpoint"),
+            "ollama_model": global_config.get("ollama_model"),
+            "content_aware_parsing": global_config.get("content_aware_parsing", True),
             "custom_prompt": global_config.get("deepseek_custom_prompt")
         })
 
 @app.route("/api/ai/test", methods=["POST"])
 def api_ai_test():
     data = request.json or {}
+    provider = data.get("provider", global_config.get("ai_provider", "deepseek"))
     test_key = data.get("api_key")
-    model = data.get("model", "deepseek-chat")
+    model = data.get("model")
+    endpoint = data.get("endpoint")
 
-    engine = DeepSeekEngine(api_key=test_key, model=model)
+    engine = DeepSeekEngine(provider=provider, api_key=test_key, model=model, endpoint=endpoint)
     success, message = engine.test_connection(test_key=test_key)
 
     return jsonify({"success": success, "message": message})
