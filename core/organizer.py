@@ -36,6 +36,36 @@ def calculate_sha256(file_path: Path) -> str:
     except Exception:
         return ""
 
+def safe_delete_file(file_path: Path) -> tuple:
+    """
+    Déplace un fichier vers la Corbeille de l'OS via send2trash.
+    Fallback vers un dossier sécurisé .organizer_trash/ si send2trash est indisponible.
+    """
+    if isinstance(file_path, str):
+        file_path = Path(file_path)
+
+    if not file_path.exists():
+        return False, "Le fichier n'existe pas."
+
+    try:
+        import send2trash
+        send2trash.send2trash(str(file_path))
+        return True, "Fichier envoyé vers la Corbeille de l'OS avec succès."
+    except Exception:
+        try:
+            trash_dir = file_path.parent / ".organizer_trash"
+            trash_dir.mkdir(parents=True, exist_ok=True)
+            dest = trash_dir / file_path.name
+            if dest.exists():
+                stem = file_path.stem
+                ext = file_path.suffix
+                dest = trash_dir / f"{stem}_{int(datetime.now().timestamp())}{ext}"
+            shutil.move(str(file_path), str(dest))
+            return True, f"Fichier déplacé en sécurité dans le dossier corbeille local ({trash_dir.name})."
+        except Exception as ex:
+            return False, f"Erreur lors de la mise en corbeille sécurisée : {ex}"
+
+
 class FileOrganizer:
     def __init__(self, target_dir: str):
         self.target_dir = Path(target_dir).resolve()
@@ -129,20 +159,25 @@ class FileOrganizer:
 
             filtered_files.append((file_path, sz, mtime_dt))
 
-        # Mode IA DeepSeek
+        # Mode IA DeepSeek & Multi-Fournisseurs
         ai_recommendations = {}
         if mode == "ai":
-            from core.ai_organizer import DeepSeekEngine
+            from core.ai_organizer import DeepSeekEngine, extract_file_snippet
             ai_engine = DeepSeekEngine()
             if ai_engine.is_configured():
                 batch_for_ai = []
                 for fp, sz, mtime_dt in filtered_files:
-                    batch_for_ai.append({
+                    f_info = {
                         "name": fp.name,
                         "extension": fp.suffix.lstrip("."),
                         "size_formatted": format_size(sz),
                         "mtime": mtime_dt.strftime("%d/%m/%Y")
-                    })
+                    }
+                    if global_config.get("content_aware_parsing", True):
+                        snip = extract_file_snippet(fp)
+                        if snip:
+                            f_info["content_snippet"] = snip
+                    batch_for_ai.append(f_info)
                 
                 success, items, msg = ai_engine.categorize_files(batch_for_ai, custom_prompt=ai_custom_prompt)
                 if success:
@@ -319,26 +354,29 @@ class FileOrganizer:
         return duplicate_groups
 
     def delete_duplicates(self, file_paths: list) -> dict:
-        """Supprime en toute sécurité les fichiers doublons spécifiés."""
+        """Déplace en toute sécurité les fichiers doublons spécifiés vers la Corbeille."""
         deleted_count = 0
         freed_bytes = 0
 
         for path_str in file_paths:
             fp = Path(path_str)
-            if fp.exists() and fp.is_file() and self.target_dir in fp.parents:
+            if fp.exists() and fp.is_file() and (self.target_dir in fp.parents or fp.parent == self.target_dir):
                 try:
                     sz = fp.stat().st_size
-                    fp.unlink()
-                    deleted_count += 1
-                    freed_bytes += sz
+                    ok, msg = safe_delete_file(fp)
+                    if ok:
+                        deleted_count += 1
+                        freed_bytes += sz
+                    else:
+                        print(f"Échec de la corbeille sécurisée pour {path_str}: {msg}")
                 except Exception as e:
-                    print(f"Erreur lors de la suppression de {path_str}: {e}")
+                    print(f"Erreur lors de la mise en corbeille de {path_str}: {e}")
 
         return {
             "success": True,
             "deleted_count": deleted_count,
             "freed_formatted": format_size(freed_bytes),
-            "message": f"{deleted_count} fichier(s) doublon(s) supprimé(s) ({format_size(freed_bytes)} libérés)."
+            "message": f"{deleted_count} fichier(s) doublon(s) placé(s) en Corbeille ({format_size(freed_bytes)} libérés)."
         }
 
     def bulk_rename(self, replace_spaces: str = "_", lowercase: bool = False, add_date_prefix: bool = False, recursive: bool = False) -> dict:
