@@ -214,4 +214,3 @@ class DeepSeekEngine:
             return False, [], f"Le fournisseur IA ({self.provider.upper()}) a retourné une réponse au format JSON invalide."
         except Exception as e:
             return False, [], f"Erreur lors de l'analyse IA ({self.provider.upper()}) : {str(e)}"
-

@@ -189,4 +189,3 @@ class HistoryManager:
                             pass
         except Exception:
             pass
-

@@ -12,7 +12,8 @@ class AutostartManager:
 
     def __init__(self):
         self.os_type = platform.system()  # 'Windows', 'Linux', 'Darwin'
-        self.project_dir = Path(__file__).parent.parent.resolve()
+        # Résoudre le dossier racine du projet
+        self.project_dir = Path(__file__).parent.parent.parent.resolve()
         self.python_exec = sys.executable
 
     def get_status(self) -> Tuple[bool, str]:
@@ -73,6 +74,8 @@ class AutostartManager:
             py_bin = str(pythonw) if pythonw.exists() else str(self.python_exec)
             
             cli_script = self.project_dir / "organizer_cli.py"
+            if not cli_script.exists():
+                cli_script = self.project_dir / "backend" / "organizer_cli.py"
 
             content = f'@echo off\nstart "" "{py_bin}" "{cli_script}" daemon\n'
             with open(bat_file, "w", encoding="utf-8") as f:
@@ -109,6 +112,8 @@ class AutostartManager:
         try:
             service_file.parent.mkdir(parents=True, exist_ok=True)
             cli_script = self.project_dir / "organizer_cli.py"
+            if not cli_script.exists():
+                cli_script = self.project_dir / "backend" / "organizer_cli.py"
 
             content = f"""[Unit]
 Description=Smart File Organizer Daemon (DeepSeek & Auto-Sort)
@@ -162,6 +167,8 @@ WantedBy=default.target
         try:
             plist_file.parent.mkdir(parents=True, exist_ok=True)
             cli_script = self.project_dir / "organizer_cli.py"
+            if not cli_script.exists():
+                cli_script = self.project_dir / "backend" / "organizer_cli.py"
 
             content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

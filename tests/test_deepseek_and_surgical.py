@@ -2,7 +2,12 @@ import unittest
 import tempfile
 import shutil
 import os
+import sys
 from pathlib import Path
+
+# Add backend directory to sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+
 from core.config import ConfigManager
 from core.history import HistoryManager
 from core.organizer import FileOrganizer

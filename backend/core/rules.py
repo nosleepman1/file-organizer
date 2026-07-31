@@ -125,4 +125,3 @@ def get_size_subfolder(file_path: Path) -> str:
             return "Très Grands (> 1Go)"
     except Exception:
         return "Taille Inconnue"
-

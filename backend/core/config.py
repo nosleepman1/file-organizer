@@ -127,4 +127,3 @@ class ConfigManager:
 
 # Singleton pour accès facile
 global_config = ConfigManager()
-

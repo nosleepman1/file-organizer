@@ -13,6 +13,8 @@ from core.rules import (
     load_custom_rules
 )
 from core.history import HistoryManager
+from core.hash_cache import global_hash_cache
+from concurrent.futures import ThreadPoolExecutor
 
 def format_size(bytes_size: int) -> str:
     """Formate une taille en octets en chaîne lisible (Ko, Mo, Go)."""
@@ -24,9 +26,6 @@ def format_size(bytes_size: int) -> str:
         return f"{bytes_size / (1024 * 1024):.1f} MB"
     else:
         return f"{bytes_size / (1024 * 1024 * 1024):.2f} GB"
-
-from core.hash_cache import global_hash_cache
-from concurrent.futures import ThreadPoolExecutor
 
 def calculate_sha256(file_path: Path) -> str:
     """Calcule le hash SHA256 d'un fichier avec cache disque intelligent."""
@@ -60,7 +59,6 @@ def safe_delete_file(file_path: Path) -> tuple:
             return True, f"Fichier déplacé en sécurité dans le dossier corbeille local ({trash_dir.name})."
         except Exception as ex:
             return False, f"Erreur lors de la mise en corbeille sécurisée : {ex}"
-
 
 class FileOrganizer:
     def __init__(self, target_dir: str):
@@ -159,6 +157,7 @@ class FileOrganizer:
         ai_recommendations = {}
         if mode == "ai":
             from core.ai_organizer import DeepSeekEngine, extract_file_snippet
+            from core.config import global_config
             ai_engine = DeepSeekEngine()
             if ai_engine.is_configured():
                 batch_for_ai = []
@@ -231,7 +230,6 @@ class FileOrganizer:
             })
 
         return proposed_actions
-
 
     def execute(self, actions: list) -> dict:
         """
@@ -508,4 +506,3 @@ class FileOrganizer:
             "total_size_formatted": format_size(total_size),
             "categories": categories_summary
         }
-

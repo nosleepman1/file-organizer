@@ -6,7 +6,8 @@ from pathlib import Path
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add backend directory to sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from core.config import ConfigManager
 from core.organizer import FileOrganizer, safe_delete_file

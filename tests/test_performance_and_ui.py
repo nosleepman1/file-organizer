@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add backend directory to sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from core.hash_cache import HashCacheManager, global_hash_cache
 from core.organizer import FileOrganizer
