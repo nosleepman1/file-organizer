@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart File Organizer - Dashboard Pro</title>
+    <title>Smart File Organizer Pro - OpenSource & IA DeepSeek</title>
     <!-- Fonts & Remix Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,12 +22,23 @@
                     <i class="ri-folder-shield-2-line"></i>
                 </div>
                 <div>
-                    <h1>Smart File Organizer <span class="badge-pro">PRO</span></h1>
-                    <p class="subtitle">Gestion, Tri Intelligents & Déduplication de Fichiers</p>
+                    <h1>Smart File Organizer <span class="badge-pro">OPEN-SOURCE</span></h1>
+                    <p class="subtitle">Daemon d'Arrière-Plan, IA DeepSeek & Tri Chirurgical</p>
                 </div>
             </div>
 
             <div class="header-actions">
+                <!-- DeepSeek Config Button -->
+                <button class="btn btn-secondary btn-sm" id="btnOpenAiModal" title="Configurer la clé API DeepSeek">
+                    <i class="ri-brain-line"></i> Clé API DeepSeek <span id="aiKeyBadge" class="badge-dot"></span>
+                </button>
+
+                <!-- OS Boot Autostart Service Badge -->
+                <div class="watcher-badge clickable" id="autostartStatusBadge" title="Cliquer pour basculer le démarrage au boot de l'ordinateur">
+                    <span class="dot"></span>
+                    <span id="autostartStatusText">Boot OS : Off</span>
+                </div>
+
                 <!-- Theme Switcher Selector -->
                 <div class="theme-selector">
                     <i class="ri-palette-line theme-icon"></i>
@@ -117,16 +128,51 @@
                         <label for="sortModeSelect">Mode de classement :</label>
                         <select id="sortModeSelect" class="form-control">
                             <option value="type" selected>📁 Par Catégorie (Extension)</option>
+                            <option value="ai">🤖 Tri IA DeepSeek (Sémantique & Propre)</option>
                             <option value="date">📅 Par Date (Année-Mois)</option>
                             <option value="size">⚖️ Par Taille de fichier</option>
                         </select>
                     </div>
 
-                    <div class="toggle-group">
+                    <!-- Custom Prompt Box for DeepSeek Mode -->
+                    <div class="form-group hidden" id="aiPromptGroup">
+                        <label for="aiCustomPromptInput">Instruction IA Personnalisée :</label>
+                        <textarea id="aiCustomPromptInput" class="form-control-sm" rows="2" placeholder="Ex: Regrouper les factures par année, et le code par langage..."></textarea>
+                    </div>
+
+                    <!-- Collapsible Surgical Filters Panel -->
+                    <div class="surgical-filters-card mt-2">
+                        <div class="surgical-filters-header" id="btnToggleSurgicalFilters">
+                            <span><i class="ri-filter-3-line"></i> Filtres Chirurgicaux</span>
+                            <i class="ri-arrow-down-s-line" id="surgicalChevron"></i>
+                        </div>
+                        <div class="surgical-filters-body hidden" id="surgicalFiltersBody">
+                            <div class="form-group-sm mt-2">
+                                <label for="filterRegex">Expression Régulière (Regex nom) :</label>
+                                <input type="text" id="filterRegex" class="form-control-sm" placeholder="ex: .*\.pdf$">
+                            </div>
+                            <div class="filter-row">
+                                <div class="form-group-sm">
+                                    <label for="filterMinSize">Taille min (Mo) :</label>
+                                    <input type="number" id="filterMinSize" class="form-control-sm" placeholder="0">
+                                </div>
+                                <div class="form-group-sm">
+                                    <label for="filterMaxSize">Taille max (Mo) :</label>
+                                    <input type="number" id="filterMaxSize" class="form-control-sm" placeholder="0">
+                                </div>
+                            </div>
+                            <div class="form-group-sm mt-2">
+                                <label for="filterDays">Derniers jours (Modifié il y a X jours) :</label>
+                                <input type="number" id="filterDays" class="form-control-sm" placeholder="Ex: 30">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="toggle-group mt-3">
                         <div class="toggle-item">
                             <div>
-                                <strong>Surveillance Temps Réel (Watcher)</strong>
-                                <p class="help-text">Auto-classement des nouveaux fichiers téléchargés</p>
+                                <strong>Surveillance Arrière-Plan (Watcher)</strong>
+                                <p class="help-text">Auto-classement continu des nouveaux fichiers</p>
                             </div>
                             <label class="switch">
                                 <input type="checkbox" id="toggleWatcher">
@@ -160,6 +206,9 @@
                     <div class="tab-header">
                         <button class="tab-btn active" data-tab="tab-preview">
                             <i class="ri-list-check-2"></i> Aperçu (<span id="previewCount">0</span>)
+                        </button>
+                        <button class="tab-btn" data-tab="tab-digest24h">
+                            <i class="ri-calendar-check-line"></i> Rapport 24H
                         </button>
                         <button class="tab-btn" data-tab="tab-duplicates">
                             <i class="ri-file-copy-2-line"></i> Doublons Hash
@@ -201,7 +250,7 @@
                                             <input type="checkbox" id="selectAllCheckbox" checked>
                                         </th>
                                         <th>Fichier</th>
-                                        <th>Catégorie</th>
+                                        <th>Catégorie / Explication</th>
                                         <th>Taille</th>
                                         <th>Destination Proposée</th>
                                     </tr>
@@ -220,7 +269,60 @@
                         </div>
                     </div>
 
-                    <!-- TAB 2: DUPLICATES -->
+                    <!-- TAB 2: DIGEST 24H -->
+                    <div class="tab-content" id="tab-digest24h">
+                        <div class="toolbar-flex">
+                            <div>
+                                <h4>📊 Rapport d'Activité des 24 Dernières Heures</h4>
+                                <p class="help-text">Synthèse automatique de tous les mouvements et classements effectués.</p>
+                            </div>
+                            <button class="btn btn-secondary" id="btnRefresh24h">
+                                <i class="ri-refresh-line"></i> Actualiser
+                            </button>
+                        </div>
+
+                        <div class="metrics-grid mt-3">
+                            <div class="metric-card">
+                                <div class="metric-icon blue"><i class="ri-file-transfer-line"></i></div>
+                                <div class="metric-info">
+                                    <span class="metric-value" id="d24TotalFiles">0</span>
+                                    <span class="metric-label">Fichiers Déplacés (24h)</span>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon purple"><i class="ri-drive-line"></i></div>
+                                <div class="metric-info">
+                                    <span class="metric-value" id="d24TotalSize">0 B</span>
+                                    <span class="metric-label">Volume Réorganisé (24h)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive mt-3">
+                            <table class="data-table" id="digest24hTable">
+                                <thead>
+                                    <tr>
+                                        <th>Horodatage</th>
+                                        <th>Fichier</th>
+                                        <th>Catégorie</th>
+                                        <th>Destination</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="digest24hTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="4">
+                                            <div class="empty-state">
+                                                <i class="ri-calendar-event-line"></i>
+                                                <p>Aucun déplacement enregistré au cours des 24 dernières heures.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: DUPLICATES -->
                     <div class="tab-content" id="tab-duplicates">
                         <div class="toolbar-flex">
                             <div>
@@ -254,7 +356,7 @@
                         </div>
                     </div>
 
-                    <!-- TAB 3: BULK RENAME -->
+                    <!-- TAB 4: BULK RENAME -->
                     <div class="tab-content" id="tab-rename">
                         <h4>Nettoyage & Renommage en Masse</h4>
                         <p class="help-text">Appliquez un motif de renommage uniforme sur tous les fichiers du dossier.</p>
@@ -286,7 +388,7 @@
                         </div>
                     </div>
 
-                    <!-- TAB 4: RULES MANAGER -->
+                    <!-- TAB 5: RULES MANAGER -->
                     <div class="tab-content" id="tab-rules">
                         <div class="toolbar-flex">
                             <div>
@@ -308,7 +410,7 @@
                         </div>
                     </div>
 
-                    <!-- TAB 5: HISTORY -->
+                    <!-- TAB 6: HISTORY -->
                     <div class="tab-content" id="tab-history">
                         <div class="table-responsive">
                             <table class="data-table" id="historyTable">
@@ -336,6 +438,47 @@
 
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- DeepSeek API Modal -->
+    <div class="modal-overlay hidden" id="aiModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="ri-brain-line"></i> Configuration API DeepSeek IA</h3>
+                <button class="btn-close" id="btnCloseAiModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="help-text">DeepSeek propose des modèles ultra-performants et très bon marché pour l'organisation intelligente de vos fichiers.</p>
+
+                <div class="form-group mt-3">
+                    <label for="aiApiKeyInput">Clé API DeepSeek (sk-...) :</label>
+                    <input type="password" id="aiApiKeyInput" class="form-control" placeholder="Entrez votre clé API DeepSeek (ex: sk-123456...)">
+                </div>
+
+                <div class="form-group mt-3">
+                    <label for="aiModelSelect">Modèle IA DeepSeek :</label>
+                    <select id="aiModelSelect" class="form-control">
+                        <option value="deepseek-chat" selected>deepseek-chat (Recommandé - Économique & Rapide)</option>
+                        <option value="deepseek-coder">deepseek-coder (Expert code & projets)</option>
+                    </select>
+                </div>
+
+                <div class="form-group mt-3">
+                    <label for="aiPromptTextarea">Instruction Système par défaut :</label>
+                    <textarea id="aiPromptTextarea" class="form-control" rows="2" placeholder="Ex: Classer les fichiers par sujet sémantique et type de projet de manière propre."></textarea>
+                </div>
+
+                <div id="aiTestResultBadge" class="test-result-badge hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnTestAiConnection">
+                    <i class="ri-wifi-line"></i> Tester la connexion
+                </button>
+                <button class="btn btn-primary" id="btnSaveAiConfig">
+                    <i class="ri-save-line"></i> Enregistrer
+                </button>
+            </div>
         </div>
     </div>
 

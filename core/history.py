@@ -31,7 +31,7 @@ class HistoryManager:
     def record_batch(self, moves: list) -> str:
         """
         Enregistre un lot de déplacements.
-        moves: list de dict {"source": str, "destination": str, "file_name": str}
+        moves: list de dict {"source": str, "destination": str, "file_name": str, "category": str, "size_bytes": int}
         Returns: batch_id
         """
         if not moves:
@@ -39,11 +39,14 @@ class HistoryManager:
             
         history = self._load_history()
         batch_id = str(uuid.uuid4())[:8]
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now()
+        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+        timestamp_iso = now.isoformat()
 
         batch_record = {
             "batch_id": batch_id,
             "timestamp": timestamp,
+            "timestamp_iso": timestamp_iso,
             "count": len(moves),
             "moves": moves
         }
@@ -111,6 +114,66 @@ class HistoryManager:
         """Retourne la liste des lots d'historique enregistrés."""
         return self._load_history()
 
+    def get_24h_digest(self) -> dict:
+        """
+        Calcule les statistiques et la liste de tous les fichiers déplacés au cours des dernières 24 heures.
+        """
+        history = self._load_history()
+        now = datetime.now()
+        
+        moves_in_24h = []
+        total_files = 0
+        total_bytes = 0
+        categories_summary = {}
+
+        for batch in history:
+            ts_str = batch.get("timestamp_iso") or batch.get("timestamp")
+            batch_dt = None
+            if ts_str:
+                try:
+                    if "T" in ts_str:
+                        batch_dt = datetime.fromisoformat(ts_str)
+                    else:
+                        batch_dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    pass
+
+            # Si la date du batch est dans la fenêtre des 24 dernières heures
+            if batch_dt and (now - batch_dt).total_seconds() <= 86400:
+                batch_moves = batch.get("moves", [])
+                for move in batch_moves:
+                    total_files += 1
+                    sz = move.get("size_bytes", 0)
+                    total_bytes += sz
+                    cat = move.get("category", "Général")
+                    categories_summary[cat] = categories_summary.get(cat, 0) + 1
+
+                    moves_in_24h.append({
+                        "batch_id": batch.get("batch_id"),
+                        "timestamp": batch.get("timestamp"),
+                        "file_name": move.get("file_name"),
+                        "source": move.get("source"),
+                        "destination": move.get("destination"),
+                        "category": cat
+                    })
+
+        # Formattage lisible de la taille
+        if total_bytes < 1024 * 1024:
+            size_formatted = f"{total_bytes / 1024:.1f} KB"
+        elif total_bytes < 1024 * 1024 * 1024:
+            size_formatted = f"{total_bytes / (1024 * 1024):.1f} MB"
+        else:
+            size_formatted = f"{total_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+        return {
+            "period": "Dernières 24 Heures",
+            "total_files_moved": total_files,
+            "total_bytes_moved": total_bytes,
+            "total_size_formatted": size_formatted,
+            "categories": categories_summary,
+            "recent_moves": moves_in_24h
+        }
+
     def _clean_empty_dirs(self):
         """Supprime récursivement les sous-dossiers vides dans le dossier cible (sauf dossiers cachés)."""
         try:
@@ -126,3 +189,4 @@ class HistoryManager:
                             pass
         except Exception:
             pass
+

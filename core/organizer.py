@@ -44,17 +44,43 @@ class FileOrganizer:
     def is_valid_directory(self) -> bool:
         return self.target_dir.exists() and self.target_dir.is_dir()
 
-    def scan(self, mode: str = "type", custom_rules: dict = None, recursive: bool = False) -> list:
+    def scan(
+        self, 
+        mode: str = "type", 
+        custom_rules: dict = None, 
+        recursive: bool = False,
+        surgical_filters: dict = None,
+        ai_custom_prompt: str = ""
+    ) -> list:
         """
         Scanne le dossier et renvoie une liste d'actions proposées (Dry-Run / Aperçu).
-        mode: 'type' (par catégorie), 'date' (par Année-Mois), ou 'size' (par taille)
+        mode: 'type', 'date', 'size', ou 'ai' (DeepSeek IA)
+        surgical_filters: {"regex": str, "min_size_mb": float, "max_size_mb": float, "date_days": int}
         """
         if not self.is_valid_directory():
             return []
 
+        import re
+        from datetime import datetime, timedelta
+
         proposed_actions = []
         rules = custom_rules if custom_rules is not None else load_custom_rules(str(self.target_dir))
         known_categories = list(rules.keys()) + ["Autres", "Divers"]
+        s_filters = surgical_filters or {}
+
+        # Extraction des filtres chirurgicaux
+        regex_pat = s_filters.get("regex", "").strip()
+        regex_compiled = None
+        if regex_pat:
+            try:
+                regex_compiled = re.compile(regex_pat, re.IGNORECASE)
+            except Exception:
+                regex_compiled = None
+
+        min_size_bytes = (s_filters.get("min_size_mb") or 0) * 1024 * 1024
+        max_size_bytes = (s_filters.get("max_size_mb") or 0) * 1024 * 1024
+        date_days = s_filters.get("date_days") or 0
+        cutoff_date = datetime.now() - timedelta(days=date_days) if date_days > 0 else None
 
         def _should_skip_item(item_path: Path) -> bool:
             if is_temp_or_ignored(item_path):
@@ -76,44 +102,105 @@ class FileOrganizer:
                 if item.is_file() and not _should_skip_item(item):
                     files_to_process.append(item)
 
+        # Application des filtres chirurgicaux
+        filtered_files = []
         for file_path in files_to_process:
-            category = get_category_for_extension(file_path.suffix, rules)
-            
-            # Détermination du sous-dossier de destination selon le mode
-            if mode == "date":
+            try:
+                stat = file_path.stat()
+                sz = stat.st_size
+                mtime_dt = datetime.fromtimestamp(stat.st_mtime)
+            except Exception:
+                sz = 0
+                mtime_dt = datetime.now()
+
+            # Filtre Regex
+            if regex_compiled and not regex_compiled.search(file_path.name):
+                continue
+
+            # Filtre Taille
+            if min_size_bytes > 0 and sz < min_size_bytes:
+                continue
+            if max_size_bytes > 0 and sz > max_size_bytes:
+                continue
+
+            # Filtre Date
+            if cutoff_date and mtime_dt < cutoff_date:
+                continue
+
+            filtered_files.append((file_path, sz, mtime_dt))
+
+        # Mode IA DeepSeek
+        ai_recommendations = {}
+        if mode == "ai":
+            from core.ai_organizer import DeepSeekEngine
+            ai_engine = DeepSeekEngine()
+            if ai_engine.is_configured():
+                batch_for_ai = []
+                for fp, sz, mtime_dt in filtered_files:
+                    batch_for_ai.append({
+                        "name": fp.name,
+                        "extension": fp.suffix.lstrip("."),
+                        "size_formatted": format_size(sz),
+                        "mtime": mtime_dt.strftime("%d/%m/%Y")
+                    })
+                
+                success, items, msg = ai_engine.categorize_files(batch_for_ai, custom_prompt=ai_custom_prompt)
+                if success:
+                    for item in items:
+                        fn = item.get("file_name")
+                        if fn:
+                            ai_recommendations[fn] = item
+
+        for file_path, size_bytes, mtime_dt in filtered_files:
+            mtime_str = mtime_dt.strftime("%d/%m/%Y %H:%M")
+            explanation = ""
+            dest_file_name = file_path.name
+
+            if mode == "ai" and file_path.name in ai_recommendations:
+                rec = ai_recommendations[file_path.name]
+                category = rec.get("category", "Divers")
+                if rec.get("suggested_name") and rec.get("suggested_name") != file_path.name:
+                    dest_file_name = rec.get("suggested_name")
+                explanation = rec.get("explanation", "Suggéré par l'IA DeepSeek")
+                dest_dir = self.target_dir / category
+            elif mode == "date":
                 subfolder = get_date_subfolder(file_path)
+                category = f"Date ({subfolder})"
                 dest_dir = self.target_dir / subfolder
             elif mode == "size":
                 subfolder = get_size_subfolder(file_path)
+                category = f"Taille ({subfolder})"
                 dest_dir = self.target_dir / subfolder
             else:  # mode == "type" par défaut
+                category = get_category_for_extension(file_path.suffix, rules)
                 dest_dir = self.target_dir / category
 
-            dest_file_path = dest_dir / file_path.name
+            dest_file_path = dest_dir / dest_file_name
 
-            # Ne pas re-déplacer si le fichier est déjà exactement au bon endroit
-            if file_path.parent == dest_dir:
+            # Ne pas re-déplacer si le fichier est déjà exactement au bon endroit avec le même nom
+            if file_path.parent == dest_dir and file_path.name == dest_file_name:
                 continue
 
-            try:
-                stat = file_path.stat()
-                size_bytes = stat.st_size
-                mtime_str = datetime.fromtimestamp(stat.st_mtime).strftime("%d/%m/%Y %H:%M")
-            except Exception:
-                size_bytes = 0
-                mtime_str = "Inconnu"
+            # Détection de collision
+            has_collision = dest_file_path.exists() and dest_file_path != file_path
+            conflict_action = "auto_rename" if has_collision else "none"
 
             proposed_actions.append({
                 "source": str(file_path),
                 "destination": str(dest_file_path),
                 "file_name": file_path.name,
+                "dest_file_name": dest_file_name,
                 "category": category,
                 "size_bytes": size_bytes,
                 "size_formatted": format_size(size_bytes),
-                "mtime": mtime_str
+                "mtime": mtime_str,
+                "explanation": explanation,
+                "has_collision": has_collision,
+                "conflict_action": conflict_action
             })
 
         return proposed_actions
+
 
     def execute(self, actions: list) -> dict:
         """

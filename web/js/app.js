@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initDefaultPath();
     setupEventListeners();
     initChart();
+    fetchAiConfig();
+    checkAutostartStatus();
     runScan();
     fetchHistory();
     fetchRules();
@@ -29,9 +31,6 @@ function setTheme(theme) {
     localStorage.setItem('sfo_theme', theme);
 }
 
-// --------------------------------------------------------------------------
-// Default Folder & Event Listeners
-// --------------------------------------------------------------------------
 function initDefaultPath() {
     const input = document.getElementById('targetDirInput');
     if (!input.value) {
@@ -39,22 +38,18 @@ function initDefaultPath() {
     }
 }
 
+// --------------------------------------------------------------------------
+// Setup Event Listeners
+// --------------------------------------------------------------------------
 function setupEventListeners() {
-    // Theme switch
     document.getElementById('themeSelect').addEventListener('change', (e) => {
         setTheme(e.target.value);
     });
 
-    // Scan button
     document.getElementById('btnScan').addEventListener('click', runScan);
-
-    // Execute button
     document.getElementById('btnExecute').addEventListener('click', runExecute);
-
-    // Undo button
     document.getElementById('btnUndo').addEventListener('click', () => runUndo());
 
-    // Presets
     document.querySelectorAll('.btn-preset').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const path = e.currentTarget.getAttribute('data-path');
@@ -63,14 +58,43 @@ function setupEventListeners() {
         });
     });
 
-    // Watcher Toggle
     document.getElementById('toggleWatcher').addEventListener('change', (e) => {
         toggleWatcher(e.target.checked);
     });
 
-    // Sort Mode Select & Recursive Toggle
-    document.getElementById('sortModeSelect').addEventListener('change', runScan);
+    // Toggle Mode AI Prompt Box
+    document.getElementById('sortModeSelect').addEventListener('change', (e) => {
+        const promptGroup = document.getElementById('aiPromptGroup');
+        if (e.target.value === 'ai') {
+            promptGroup.classList.remove('hidden');
+        } else {
+            promptGroup.classList.add('hidden');
+        }
+        runScan();
+    });
+
     document.getElementById('toggleRecursive').addEventListener('change', runScan);
+
+    // Collapsible Surgical Filters
+    document.getElementById('btnToggleSurgicalFilters').addEventListener('click', () => {
+        const body = document.getElementById('surgicalFiltersBody');
+        const chevron = document.getElementById('surgicalChevron');
+        body.classList.toggle('hidden');
+        if (body.classList.contains('hidden')) {
+            chevron.className = "ri-arrow-down-s-line";
+        } else {
+            chevron.className = "ri-arrow-up-s-line";
+        }
+    });
+
+    // DeepSeek AI Modal Listeners
+    document.getElementById('btnOpenAiModal').addEventListener('click', openAiModal);
+    document.getElementById('btnCloseAiModal').addEventListener('click', closeAiModal);
+    document.getElementById('btnSaveAiConfig').addEventListener('click', saveAiConfig);
+    document.getElementById('btnTestAiConnection').addEventListener('click', testAiConnection);
+
+    // Autostart Badge Listener
+    document.getElementById('autostartStatusBadge').addEventListener('click', toggleAutostartService);
 
     // Tabs Navigation
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -81,14 +105,19 @@ function setupEventListeners() {
             const tabId = e.currentTarget.getAttribute('data-tab');
             e.currentTarget.classList.add('active');
             document.getElementById(tabId).classList.add('active');
+
+            if (tabId === 'tab-digest24h') {
+                fetch24hDigest();
+            }
         });
     });
+
+    document.getElementById('btnRefresh24h').addEventListener('click', fetch24hDigest);
 
     // Search and Category Filter
     document.getElementById('searchInput').addEventListener('input', renderPreviewTable);
     document.getElementById('categoryFilter').addEventListener('change', renderPreviewTable);
 
-    // Select All Checkbox
     document.getElementById('selectAllCheckbox').addEventListener('change', (e) => {
         const isChecked = e.target.checked;
         const rows = document.querySelectorAll('.preview-row-checkbox');
@@ -104,16 +133,147 @@ function setupEventListeners() {
         updateSelectionCounters();
     });
 
-    // Duplicates tab
     document.getElementById('btnScanDuplicates').addEventListener('click', runScanDuplicates);
     document.getElementById('btnDeleteSelectedDuplicates').addEventListener('click', runDeleteDuplicates);
 
-    // Rename tab
     document.getElementById('btnApplyRename').addEventListener('click', runApplyRename);
 
-    // Rules tab
     document.getElementById('btnSaveRules').addEventListener('click', runSaveRules);
     document.getElementById('btnAddCategoryBtn').addEventListener('click', promptAddCategory);
+}
+
+// --------------------------------------------------------------------------
+// DeepSeek Config & Modal
+// --------------------------------------------------------------------------
+async function fetchAiConfig() {
+    try {
+        const res = await fetch('/api/ai/config');
+        const data = await res.json();
+        if (data.success) {
+            const keyBadge = document.getElementById('aiKeyBadge');
+            if (data.has_key) {
+                keyBadge.className = "badge-dot green";
+                document.getElementById('aiApiKeyInput').placeholder = `Clé enregistrée (${data.masked_key})`;
+            } else {
+                keyBadge.className = "badge-dot orange";
+            }
+            if (data.model) document.getElementById('aiModelSelect').value = data.model;
+            if (data.custom_prompt) {
+                document.getElementById('aiPromptTextarea').value = data.custom_prompt;
+                document.getElementById('aiCustomPromptInput').value = data.custom_prompt;
+            }
+        }
+    } catch (err) {
+        console.error("Erreur chargement config IA:", err);
+    }
+}
+
+function openAiModal() {
+    document.getElementById('aiModal').classList.remove('hidden');
+}
+
+function closeAiModal() {
+    document.getElementById('aiModal').classList.add('hidden');
+}
+
+async function saveAiConfig() {
+    const key = document.getElementById('aiApiKeyInput').value.trim();
+    const model = document.getElementById('aiModelSelect').value;
+    const prompt = document.getElementById('aiPromptTextarea').value.trim();
+
+    try {
+        const res = await fetch('/api/ai/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                deepseek_api_key: key,
+                deepseek_model: model,
+                deepseek_custom_prompt: prompt
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("✅ Configuration IA DeepSeek enregistrée !", "success");
+            fetchAiConfig();
+            closeAiModal();
+        } else {
+            showToast("❌ Erreur sauvegarde IA", "error");
+        }
+    } catch (err) {
+        showToast(`❌ Erreur: ${err.message}`, "error");
+    }
+}
+
+async function testAiConnection() {
+    const key = document.getElementById('aiApiKeyInput').value.trim();
+    const model = document.getElementById('aiModelSelect').value;
+    const badge = document.getElementById('aiTestResultBadge');
+
+    badge.className = "test-result-badge show info";
+    badge.innerText = "⏳ Test de connexion à l'API DeepSeek en cours...";
+
+    try {
+        const res = await fetch('/api/ai/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: key, model: model })
+        });
+        const data = await res.json();
+        if (data.success) {
+            badge.className = "test-result-badge show success";
+            badge.innerText = `✅ ${data.message}`;
+        } else {
+            badge.className = "test-result-badge show error";
+            badge.innerText = `❌ ${data.message}`;
+        }
+    } catch (err) {
+        badge.className = "test-result-badge show error";
+        badge.innerText = `❌ Erreur réseau : ${err.message}`;
+    }
+}
+
+// --------------------------------------------------------------------------
+// Autostart OS Boot Service
+// --------------------------------------------------------------------------
+async function checkAutostartStatus() {
+    try {
+        const res = await fetch('/api/service/autostart');
+        const data = await res.json();
+        updateAutostartBadge(data.enabled, data.description);
+    } catch (err) {
+        console.error("Erreur statut autostart:", err);
+    }
+}
+
+async function toggleAutostartService() {
+    const isCurrentlyEnabled = document.getElementById('autostartStatusBadge').classList.contains('active');
+    const newState = !isCurrentlyEnabled;
+
+    try {
+        const res = await fetch('/api/service/autostart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enable: newState })
+        });
+        const data = await res.json();
+        updateAutostartBadge(data.enabled, data.message);
+        showToast(data.message, data.enabled ? "success" : "info");
+    } catch (err) {
+        showToast("Erreur lors de la modification de l'autostart Boot.", "error");
+    }
+}
+
+function updateAutostartBadge(isEnabled, desc) {
+    const badge = document.getElementById('autostartStatusBadge');
+    const text = document.getElementById('autostartStatusText');
+    if (isEnabled) {
+        badge.classList.add('active');
+        text.innerText = "Boot OS : Actif 🟢";
+    } else {
+        badge.classList.remove('active');
+        text.innerText = "Boot OS : Inactif 🔴";
+    }
+    badge.title = desc || "Démarrage automatique au boot OS";
 }
 
 // --------------------------------------------------------------------------
@@ -124,18 +284,33 @@ async function runScan() {
     const mode = document.getElementById('sortModeSelect').value;
     const recursive = document.getElementById('toggleRecursive').checked;
 
+    const surgicalFilters = {
+        regex: document.getElementById('filterRegex').value.trim(),
+        min_size_mb: parseFloat(document.getElementById('filterMinSize').value) || 0,
+        max_size_mb: parseFloat(document.getElementById('filterMaxSize').value) || 0,
+        date_days: parseInt(document.getElementById('filterDays').value) || 0
+    };
+
+    const aiCustomPrompt = document.getElementById('aiCustomPromptInput').value.trim();
+
     if (!targetDir) {
         showToast("⚠️ Veuillez spécifier un dossier.", "warning");
         return;
     }
 
-    showToast("🔍 Analyse du dossier en cours...", "info");
+    showToast(mode === 'ai' ? "🤖 IA DeepSeek en cours d'analyse..." : "🔍 Analyse du dossier...", "info");
 
     try {
         const response = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_dir: targetDir, mode: mode, recursive: recursive })
+            body: JSON.stringify({
+                target_dir: targetDir,
+                mode: mode,
+                recursive: recursive,
+                surgical_filters: surgicalFilters,
+                ai_custom_prompt: aiCustomPrompt
+            })
         });
 
         const data = await response.json();
@@ -150,10 +325,10 @@ async function runScan() {
 
         updateCategoryFilterOptions();
         updateUIWithScanResults(data);
-        showToast(`✅ Analyse terminée (${currentActions.length} actions détectées).`, "success");
+        showToast(`✅ Scan terminé (${currentActions.length} actions proposées).`, "success");
 
     } catch (err) {
-        showToast(`❌ Erreur de communication serveur: ${err.message}`, "error");
+        showToast(`❌ Erreur de communication avec le serveur: ${err.message}`, "error");
     }
 }
 
@@ -180,7 +355,7 @@ function renderPreviewTable() {
     const search = document.getElementById('searchInput').value.toLowerCase();
     const categoryFilter = document.getElementById('categoryFilter').value;
 
-    const filteredActions = currentActions.filter((action, index) => {
+    const filteredActions = currentActions.filter((action) => {
         const matchSearch = action.file_name.toLowerCase().includes(search) || action.destination.toLowerCase().includes(search);
         const matchCat = !categoryFilter || action.category === categoryFilter;
         return matchSearch && matchCat;
@@ -201,13 +376,26 @@ function renderPreviewTable() {
         tbody.innerHTML = filteredActions.map((action) => {
             const originalIndex = currentActions.indexOf(action);
             const isChecked = selectedActionIndices.has(originalIndex);
+            
+            const explanationHtml = action.explanation ? 
+                `<div class="ai-explanation-badge"><i class="ri-brain-line"></i> ${escapeHtml(action.explanation)}</div>` : '';
+            
+            const conflictHtml = action.has_collision ? 
+                `<span class="badge-warning" title="Fichier existant - sera renommé automatiquement pour ne rien écraser">⚠️ Conflit</span>` : '';
+
             return `
                 <tr>
                     <td>
                         <input type="checkbox" class="preview-row-checkbox" data-index="${originalIndex}" ${isChecked ? 'checked' : ''} onchange="toggleActionSelection(${originalIndex}, this.checked)">
                     </td>
-                    <td><strong>${escapeHtml(action.file_name)}</strong></td>
-                    <td><span class="badge-category">${escapeHtml(action.category)}</span></td>
+                    <td>
+                        <strong>${escapeHtml(action.file_name)}</strong>
+                        ${conflictHtml}
+                    </td>
+                    <td>
+                        <span class="badge-category">${escapeHtml(action.category)}</span>
+                        ${explanationHtml}
+                    </td>
                     <td>${action.size_formatted}</td>
                     <td class="path-text">${escapeHtml(action.destination)}</td>
                 </tr>
@@ -240,8 +428,8 @@ function updateSelectionCounters() {
 // --------------------------------------------------------------------------
 async function runExecute() {
     const targetDir = document.getElementById('targetDirInput').value.trim();
-
     const selectedActions = currentActions.filter((_, i) => selectedActionIndices.has(i));
+    
     if (selectedActions.length === 0) {
         showToast("⚠️ Aucune action sélectionnée.", "warning");
         return;
@@ -295,6 +483,49 @@ async function runUndo(batchId = null) {
 }
 
 // --------------------------------------------------------------------------
+// 24H Digest Report
+// --------------------------------------------------------------------------
+async function fetch24hDigest() {
+    const targetDir = document.getElementById('targetDirInput').value.trim();
+    try {
+        const res = await fetch(`/api/history/24h?target_dir=${encodeURIComponent(targetDir)}`);
+        const data = await res.json();
+        if (data.success) {
+            const digest = data.digest || {};
+            document.getElementById('d24TotalFiles').innerText = digest.total_files_moved || 0;
+            document.getElementById('d24TotalSize').innerText = digest.total_size_formatted || "0 B";
+
+            const tbody = document.getElementById('digest24hTableBody');
+            const recent = digest.recent_moves || [];
+
+            if (recent.length === 0) {
+                tbody.innerHTML = `
+                    <tr class="empty-row">
+                        <td colspan="4">
+                            <div class="empty-state">
+                                <i class="ri-calendar-event-line"></i>
+                                <p>Aucun déplacement enregistré dans les dernières 24h.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tbody.innerHTML = recent.map(m => `
+                    <tr>
+                        <td><code>${escapeHtml(m.timestamp)}</code></td>
+                        <td><strong>${escapeHtml(m.file_name)}</strong></td>
+                        <td><span class="badge-category">${escapeHtml(m.category)}</span></td>
+                        <td class="path-text">${escapeHtml(m.destination)}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+    } catch (err) {
+        console.error("Erreur digest 24h:", err);
+    }
+}
+
+// --------------------------------------------------------------------------
 // Duplicates Finder
 // --------------------------------------------------------------------------
 async function runScanDuplicates() {
@@ -344,7 +575,7 @@ function renderDuplicates(groups) {
     document.getElementById('dupWastedSpace').innerText = formatSize(totalWastedBytes);
     banner.classList.remove('hidden');
 
-    container.innerHTML = groups.map((g, groupIdx) => `
+    container.innerHTML = groups.map((g) => `
         <div class="duplicate-group-card">
             <div class="group-header">
                 <span><i class="ri-fingerprint-line"></i> Groupe #${g.hash} (${g.count} fichiers identiques - ${g.size_formatted} chacun)</span>
@@ -671,7 +902,7 @@ function showToast(message, type = "info") {
 }
 
 function escapeHtml(str) {
-    return String(str)
+    return String(str || '')
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
