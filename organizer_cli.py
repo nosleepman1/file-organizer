@@ -31,29 +31,43 @@ def resolve_target_dir(dir_arg: str) -> Path:
 def handle_config_command(args):
     print("⚙️  Configuration Smart File Organizer")
     changed = False
-    if args.key is not None:
-        global_config.set("deepseek_api_key", args.key)
-        print(f"🔑 Clé API DeepSeek enregistrée: {global_config.get_masked_api_key()}")
+    if getattr(args, "provider", None):
+        global_config.set("ai_provider", args.provider)
+        print(f"🤖 Fournisseur IA sélectionné : {args.provider.upper()}")
+        changed = True
+
+    if getattr(args, "key", None) is not None:
+        provider = global_config.get("ai_provider", "deepseek")
+        key_name = "openai_api_key" if provider == "openai" else "deepseek_api_key"
+        global_config.set(key_name, args.key)
+        print(f"🔑 Clé API {provider.upper()} enregistrée: {global_config.get_masked_api_key(key_name)}")
         changed = True
         
         # Test de connexion immédiat si clé fournie
-        engine = DeepSeekEngine(api_key=args.key)
+        engine = DeepSeekEngine(provider=provider, api_key=args.key)
         ok, msg = engine.test_connection()
         print(f"{'✅' if ok else '❌'} {msg}")
 
-    if args.model:
+    if getattr(args, "model", None):
         global_config.set("deepseek_model", args.model)
         print(f"🤖 Modèle IA défini : {args.model}")
         changed = True
 
-    if args.prompt:
+    if getattr(args, "prompt", None):
         global_config.set("deepseek_custom_prompt", args.prompt)
         print(f"📝 Prompt système IA mis à jour : {args.prompt}")
         changed = True
 
     if not changed:
-        print(f" • Clé API DeepSeek : {global_config.get_masked_api_key() or '(Non configurée)'}")
-        print(f" • Modèle IA active : {global_config.get('deepseek_model')}")
+        provider = global_config.get("ai_provider", "deepseek")
+        print(f" • Fournisseur IA : {provider.upper()}")
+        if provider == "ollama":
+            print(f" • Serveur Local : {global_config.get('ollama_endpoint')} (100% Offline)")
+            print(f" • Modèle Ollama  : {global_config.get('ollama_model')}")
+        else:
+            print(f" • Clé API ({provider.upper()}) : {global_config.get_masked_api_key('openai_api_key' if provider == 'openai' else 'deepseek_api_key') or '(Non configurée)'}")
+            print(f" • Modèle IA actif : {global_config.get('deepseek_model')}")
+        print(f" • Content-Aware  : {'Activé' if global_config.get('content_aware_parsing', True) else 'Désactivé'}")
         print(f" • Prompt système : {global_config.get('deepseek_custom_prompt')}")
         print(f" • Dossier par défaut: {global_config.get('default_target_dir')}")
 
@@ -141,9 +155,10 @@ def main():
     service_parser.add_argument("action", choices=["install", "uninstall", "status"], help="Action à exécuter")
 
     # Command: config
-    config_parser = subparsers.add_parser("config", help="Configurer la clé API DeepSeek et les options")
-    config_parser.add_argument("--key", type=str, help="Définir la clé API DeepSeek")
-    config_parser.add_argument("--model", type=str, help="Définir le modèle IA (deepseek-chat, deepseek-coder)")
+    config_parser = subparsers.add_parser("config", help="Configurer le fournisseur IA et les options")
+    config_parser.add_argument("--provider", choices=["deepseek", "ollama", "openai", "custom"], help="Fournisseur IA (deepseek, ollama, openai, custom)")
+    config_parser.add_argument("--key", type=str, help="Définir la clé API")
+    config_parser.add_argument("--model", type=str, help="Définir le modèle IA (ex: deepseek-chat, gpt-4o-mini, llama3:latest)")
     config_parser.add_argument("--prompt", type=str, help="Définir le prompt système personnalisé pour l'IA")
 
     # Command: history
