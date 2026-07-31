@@ -5,8 +5,8 @@ from pathlib import Path
 import sys
 import os
 
-# Ajouter le répertoire racine au sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Activer l'importation depuis backend/ et backend/core
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from core.rules import get_category_for_extension, is_temp_or_ignored, save_custom_rules, load_custom_rules
 from core.organizer import FileOrganizer

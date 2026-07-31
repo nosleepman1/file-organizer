@@ -1,12 +1,12 @@
 import unittest
 import tempfile
 import shutil
+import sys
 import os
 from pathlib import Path
-import sys
 
-# Add backend directory to sys.path
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+# Activer l'importation depuis backend/ et backend/core
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from core.hash_cache import HashCacheManager, global_hash_cache
 from core.organizer import FileOrganizer

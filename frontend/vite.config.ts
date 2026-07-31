@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../web',
+    outDir: '../backend/web',
     emptyOutDir: true,
   },
   server: {

@@ -2,12 +2,12 @@ import unittest
 import tempfile
 import shutil
 import json
-from pathlib import Path
 import sys
 import os
+from pathlib import Path
 
-# Add backend directory to sys.path
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+# Activer l'importation depuis backend/ et backend/core
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from core.config import ConfigManager
 from core.organizer import FileOrganizer, safe_delete_file
